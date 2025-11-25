@@ -1,5 +1,9 @@
 let cy = null;
 let edgeMetadata = new Map();
+let nodeMetadata = new Map();
+let nodeTypeColorMap = new Map();  // NodeType → 色のマッピング
+let colorPalette = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c', '#e67e22', '#95a5a6', '#34495e', '#c0392b'];
+let edgeDataLoaded = false;  // エッジリスト読み込み済みフラグ
 
 // DOMが読込まれるまで待機
 document.addEventListener('DOMContentLoaded', function() {
@@ -27,7 +31,7 @@ document.addEventListener('DOMContentLoaded', function() {
             {
                 selector: 'node:selected',
                 style: {
-                    'background-color': '#e74c3c',
+                    'background-color': '#8B6F47',
                     'width': 50,
                     'height': 50
                 }
@@ -36,7 +40,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 selector: 'edge',
                 style: {
                     'line-color': '#bdc3c7',
-                    'width': 0.5,
+                    'width': 'mapData(weight, 0, 50, 0.5, 10)',
                     'target-arrow-color': '#bdc3c7',
                     'target-arrow-shape': 'none',
                     'curve-style': 'bezier',
@@ -54,7 +58,7 @@ document.addEventListener('DOMContentLoaded', function() {
             {
                 selector: 'node.highlighted',
                 style: {
-                    'background-color': '#f39c12',
+                    'background-color': '#FFB6C1',
                     'width': 50,
                     'height': 50,
                     'border-width': 1,
@@ -69,6 +73,30 @@ document.addEventListener('DOMContentLoaded', function() {
                     'width': 1,
                     'z-index': 10
                 }
+            },
+            {
+                selector: 'node.type-colored',
+                style: {
+                    'background-color': 'data(nodeColor)'
+                }
+            },
+            {
+                selector: 'node.type-colored:selected',
+                style: {
+                    'background-color': '#8B6F47',
+                    'width': 50,
+                    'height': 50
+                }
+            },
+            {
+                selector: 'node.type-colored.highlighted',
+                style: {
+                    'background-color': '#FFB6C1',
+                    'width': 50,
+                    'height': 50,
+                    'border-width': 1,
+                    'border-color': '#e67e22'
+                }
             }
         ],
         layout: {
@@ -79,19 +107,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
     console.log('Cytoscape initialized');
 
-    // ファイル入力イベント
-    document.getElementById('fileInput').addEventListener('change', function(e) {
-        console.log('File selected');
+    // エッジファイル入力イベント
+    document.getElementById('edgeFileInput').addEventListener('change', function(e) {
+        console.log('Edge file selected');
         const file = e.target.files[0];
         if (!file) return;
 
         // ファイル名を表示
-        document.getElementById('fileName').textContent = `読込ファイル: ${file.name}`;
+        document.getElementById('edgeFileName').textContent = `読込ファイル: ${file.name}`;
 
         const reader = new FileReader();
         reader.onload = function(event) {
             try {
-                console.log('File loaded, parsing CSV...');
+                console.log('Edge file loaded, parsing CSV...');
                 const csv = event.target.result;
                 const nodes = [];
                 const edges = [];
@@ -136,7 +164,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                     const source = parts[sourceIdx].trim();
                     const target = parts[targetIdx].trim();
-                    const edgeWeight = edgeWeightIdx !== -1 ? parts[edgeWeightIdx]?.trim() : '';
+                    const edgeWeight = edgeWeightIdx !== -1 ? parseFloat(parts[edgeWeightIdx]?.trim()) || 1 : 1;
                     const affiliatedPapers = affiliatedPapersIdx !== -1 ? parts[affiliatedPapersIdx]?.trim() : '';
                     const affiliatedOrg = affiliatedOrgIdx !== -1 ? parts[affiliatedOrgIdx]?.trim() : '';
                     const affiliatedOrgName = affiliatedOrgNameIdx !== -1 ? parts[affiliatedOrgNameIdx]?.trim() : '';
@@ -198,6 +226,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 console.log('Hierarchical layout applied');
 
+                // エッジリスト読み込み完了フラグを立てる
+                edgeDataLoaded = true;
+                
+                // ノードリストボタンを有効化
+                document.getElementById('nodeFileButton').disabled = false;
+
                 showMessage(`成功: ${nodes.length} 個のノード、${edges.length} 本のエッジを読み込みました`, 'success');
 
             } catch (error) {
@@ -213,14 +247,169 @@ document.addEventListener('DOMContentLoaded', function() {
         reader.readAsText(file);
     });
 
+    // ノードファイル入力イベント
+    document.getElementById('nodeFileInput').addEventListener('change', function(e) {
+        console.log('Node file selected');
+        const file = e.target.files[0];
+        if (!file) return;
+
+        // ファイル名を表示
+        document.getElementById('nodeFileName').textContent = `読込ファイル: ${file.name}`;
+
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            try {
+                console.log('Node file loaded, parsing CSV...');
+                const csv = event.target.result;
+
+                // CSV を解析
+                const lines = csv.trim().split('\n');
+                if (lines.length < 2) {
+                    showMessage('エラー: ノードファイルが空です', 'error');
+                    return;
+                }
+
+                // ヘッダー行を取得
+                const header = lines[0].split(',').map(h => h.trim());
+
+                // ノード ID 列のインデックスを取得
+                const nodeIdx = header.indexOf('Node');
+                if (nodeIdx === -1) {
+                    showMessage('エラー: "Node" 列が見つかりません', 'error');
+                    return;
+                }
+
+                // ファイルタイプを判定
+                const hasNodeType = header.indexOf('NodeType') !== -1;
+                const hasAffiliatedPapers = header.indexOf('AffiliatedPapers') !== -1;
+                const hasAffiliatedOrganizations = header.indexOf('AffiliatedOrganizations') !== -1;
+                const hasAffiliatedOrganizationNames = header.indexOf('AffiliatedOrganizationNames') !== -1;
+                const hasNodeWeight = header.indexOf('NodeWeight') !== -1;
+
+                let processedNodesCount = 0;
+
+                // データ行を処理
+                for (let i = 1; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    if (line === '') continue;
+
+                    const parts = parseCSVLine(line);
+                    if (parts.length <= nodeIdx) {
+                        console.warn(`警告: 行 ${i + 1} のデータが不足しています`);
+                        continue;
+                    }
+
+                    const nodeId = parts[nodeIdx].trim();
+                    if (!nodeId) continue;
+
+                    // 既存のノードデータを取得、なければ新規作成
+                    let nodeData = nodeMetadata.get(nodeId);
+                    if (!nodeData) {
+                        nodeData = {};
+                    }
+
+                    // 新しいデータを統合（既存データを優先）
+                    if (hasNodeType) {
+                        const nodeTypeIdx = header.indexOf('NodeType');
+                        const nodeType = parts[nodeTypeIdx]?.trim() || '';
+                        
+                        // nodeTypeが存在しない場合のみ設定
+                        if (!nodeData.nodeType && nodeType) {
+                            nodeData.nodeType = nodeType;
+                            
+                            // NodeType に色を割り当てる
+                            if (!nodeTypeColorMap.has(nodeType)) {
+                                nodeTypeColorMap.set(nodeType, colorPalette[Array.from(nodeTypeColorMap.keys()).length % colorPalette.length]);
+                            }
+                        }
+                    }
+
+                    if (hasAffiliatedPapers) {
+                        const papersIdx = header.indexOf('AffiliatedPapers');
+                        const papers = parseListField(parts[papersIdx]?.trim() || '');
+                        
+                        // papers が存在しない場合のみ設定
+                        if (!nodeData.papers || nodeData.papers.length === 0) {
+                            nodeData.papers = papers;
+                        }
+                    }
+
+                    if (hasAffiliatedOrganizations) {
+                        const orgIdx = header.indexOf('AffiliatedOrganizations');
+                        const organizations = parseListField(parts[orgIdx]?.trim() || '');
+                        
+                        // organizations が存在しない場合のみ設定
+                        if (!nodeData.organizations || nodeData.organizations.length === 0) {
+                            nodeData.organizations = organizations;
+                        }
+                    }
+
+                    if (hasAffiliatedOrganizationNames) {
+                        const orgNameIdx = header.indexOf('AffiliatedOrganizationNames');
+                        const organizationNames = parseListField(parts[orgNameIdx]?.trim() || '');
+                        
+                        // organizationNames が存在しない場合のみ設定
+                        if (!nodeData.organizationNames || nodeData.organizationNames.length === 0) {
+                            nodeData.organizationNames = organizationNames;
+                        }
+                    }
+
+                    if (hasNodeWeight) {
+                        const weightIdx = header.indexOf('NodeWeight');
+                        const nodeWeight = parts[weightIdx]?.trim() || '';
+                        
+                        // nodeWeight が存在しない場合のみ設定
+                        if (!nodeData.nodeWeight && nodeWeight) {
+                            nodeData.nodeWeight = nodeWeight;
+                        }
+                    }
+
+                    nodeMetadata.set(nodeId, nodeData);
+                    processedNodesCount++;
+                }
+
+                // ノードの色を適用
+                applyNodeStyles();
+                
+                // グラフ内のすべてのノードに対してもスタイルを再適用
+                cy.nodes().forEach(node => {
+                    const nodeId = node.id();
+                    const nodeData = nodeMetadata.get(nodeId);
+                    
+                    if (nodeData && nodeData.nodeType) {
+                        const color = nodeTypeColorMap.get(nodeData.nodeType) || '#3498db';
+                        node.data('nodeColor', color);
+                        node.addClass('type-colored');
+                    }
+                });
+
+                console.log(`Loaded node data for ${processedNodesCount} nodes (total: ${nodeMetadata.size})`);
+                showMessage(`成功: ${processedNodesCount} 個のノードデータを読み込みました（合計: ${nodeMetadata.size}個）`, 'success');
+
+            } catch (error) {
+                console.error('Error:', error);
+                showMessage(`エラー: ノードファイルの解析に失敗しました (${error.message})`, 'error');
+            }
+        };
+
+        reader.onerror = function() {
+            showMessage('エラー: ノードファイルの読込に失敗しました', 'error');
+        };
+
+        reader.readAsText(file);
+    });
+
     // ノードとエッジ選択イベント
     cy.on('select', 'node', function(e) {
         const node = e.target;
+        const nodeId = node.id();
+        const nodeData = nodeMetadata.get(nodeId) || {};
         const infoPanelEl = document.getElementById('networkInfo');
-        infoPanelEl.innerHTML = `
+        
+        let html = `
             <div class="info-item">
                 <label>ノードID</label>
-                <p>${node.id()}</p>
+                <p>${nodeId}</p>
             </div>
             <div class="info-item">
                 <label>接続数（出次数）</label>
@@ -231,6 +420,53 @@ document.addEventListener('DOMContentLoaded', function() {
                 <p>${node.indegree()}</p>
             </div>
         `;
+
+        if (nodeData.nodeType) {
+            html += `
+                <div class="info-item">
+                    <label>ノードタイプ</label>
+                    <p>${nodeData.nodeType}</p>
+                </div>
+            `;
+        }
+
+        if (nodeData.nodeWeight) {
+            html += `
+                <div class="info-item">
+                    <label>ノードウェイト</label>
+                    <p>${nodeData.nodeWeight}</p>
+                </div>
+            `;
+        }
+
+        if (nodeData.papers && nodeData.papers.length > 0) {
+            html += `
+                <div class="info-item">
+                    <label>関連論文</label>
+                    <p>${nodeData.papers.join('<br>')}</p>
+                </div>
+            `;
+        }
+
+        if (nodeData.organizations && nodeData.organizations.length > 0) {
+            html += `
+                <div class="info-item">
+                    <label>関連機関</label>
+                    <p>${nodeData.organizations.join('<br>')}</p>
+                </div>
+            `;
+        }
+
+        if (nodeData.organizationNames && nodeData.organizationNames.length > 0) {
+            html += `
+                <div class="info-item">
+                    <label>機関名</label>
+                    <p>${nodeData.organizationNames.join('<br>')}</p>
+                </div>
+            `;
+        }
+
+        infoPanelEl.innerHTML = html;
     });
 
     // ノードホバーイベント
@@ -242,6 +478,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // このノードから到達可能なノードとエッジを強調表示
         highlightReachableNodes(node);
+        
+        // ノード自体も強調表示
+        node.addClass('highlighted');
     });
 
     // ノードホバー終了イベント
@@ -451,5 +690,22 @@ function highlightReachableNodes(startNode) {
 
     highlightedEdges.forEach(edgeId => {
         cy.getElementById(edgeId).addClass('highlighted');
+    });
+}
+
+// ノードスタイルを適用する関数
+function applyNodeStyles() {
+    cy.nodes().forEach(node => {
+        const nodeId = node.id();
+        const nodeData = nodeMetadata.get(nodeId);
+        
+        if (nodeData && nodeData.nodeType) {
+            const color = nodeTypeColorMap.get(nodeData.nodeType) || '#3498db';
+            node.data('nodeColor', color);
+            node.addClass('type-colored');
+        } else {
+            // NodeType がない場合はデフォルト色
+            node.removeClass('type-colored');
+        }
     });
 }

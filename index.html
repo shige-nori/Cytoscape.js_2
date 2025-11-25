@@ -69,6 +69,16 @@
             background-color: #1f618d;
         }
 
+        .file-button:disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        .file-button:disabled:hover {
+            background-color: #95a5a6;
+        }
+
         .file-name {
             color: #ecf0f1;
             margin-left: 10px;
@@ -155,11 +165,18 @@
             <h1>ネットワーク図ビューアー</h1>
             <div class="controls">
                 <div class="file-input-wrapper">
-                    <input type="file" id="fileInput" accept=".csv" />
-                    <button class="file-button" onclick="document.getElementById('fileInput').click();">
-                        ファイルを選択
+                    <input type="file" id="nodeFileInput" accept=".csv" />
+                    <button class="file-button" id="nodeFileButton" disabled onclick="document.getElementById('nodeFileInput').click();">
+                        ノードリストを選択
                     </button>
-                    <span class="file-name" id="fileName"></span>
+                    <span class="file-name" id="nodeFileName"></span>
+                </div>
+                <div class="file-input-wrapper">
+                    <input type="file" id="edgeFileInput" accept=".csv" />
+                    <button class="file-button" onclick="document.getElementById('edgeFileInput').click();">
+                        エッジリストを選択
+                    </button>
+                    <span class="file-name" id="edgeFileName"></span>
                 </div>
             </div>
             <div class="message" id="message"></div>
