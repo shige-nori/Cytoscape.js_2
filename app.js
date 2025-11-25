@@ -36,9 +36,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 selector: 'edge',
                 style: {
                     'line-color': '#bdc3c7',
-                    'width': 2,
+                    'width': 0.5,
                     'target-arrow-color': '#bdc3c7',
-                    'target-arrow-shape': 'triangle',
+                    'target-arrow-shape': 'none',
                     'curve-style': 'bezier',
                     'control-point-step-size': 40
                 }
@@ -48,7 +48,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 style: {
                     'line-color': '#e74c3c',
                     'target-arrow-color': '#e74c3c',
-                    'width': 3
+                    'width': 1
                 }
             },
             {
@@ -57,7 +57,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     'background-color': '#f39c12',
                     'width': 50,
                     'height': 50,
-                    'border-width': 3,
+                    'border-width': 1,
                     'border-color': '#e67e22'
                 }
             },
@@ -66,7 +66,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 style: {
                     'line-color': '#f39c12',
                     'target-arrow-color': '#f39c12',
-                    'width': 3,
+                    'width': 1,
                     'z-index': 10
                 }
             }
