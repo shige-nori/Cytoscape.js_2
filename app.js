@@ -111,11 +111,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 const targetIdx = header.indexOf('Target');
                 const edgeWeightIdx = header.indexOf('EdgeWeight');
                 const affiliatedPapersIdx = header.indexOf('AffiliatedPapers');
-                const affiliatedOrgIdx = header.indexOf('AffiliatedOrganization');
-                const affiliatedOrgNameIdx = header.indexOf('AffiliatedOrganizationName');
+                const affiliatedOrgIdx = header.indexOf('AffiliatedOrganizations');
+                const affiliatedOrgNameIdx = header.indexOf('AffiliatedOrganizationNames');
 
-                if (sourceIdx === -1 || targetIdx === -1) {
-                    showMessage('エラー: "Source" または "Target" 列が見つかりません', 'error');
+                if (sourceIdx === -1 || targetIdx === -1 || affiliatedPapersIdx === -1 || affiliatedOrgIdx === -1 || affiliatedOrgNameIdx === -1) {
+                    showMessage('エラー: "Source"、"Target"、"AffiliatedPapers"、"AffiliatedOrganizations"、"AffiliatedOrganizationNames" 列が必要です', 'error');
                     return;
                 }
 
